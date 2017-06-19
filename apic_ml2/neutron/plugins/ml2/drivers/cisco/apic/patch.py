@@ -14,15 +14,16 @@
 #    under the License.
 
 
-from neutron import manager
 from neutron.plugins.ml2 import managers
 from neutron.plugins.ml2 import plugin
+from neutron_lib import constants
+from neutron_lib.plugins import directory
 
 from apic_ml2.neutron.plugins.ml2.drivers.cisco.apic import exceptions
 
 
 apic_stashed_create_network = plugin.Ml2Plugin.create_network
-apic_stashed_get_plugin = manager.NeutronManager.get_plugin
+apic_stashed_get_plugin = directory.get_plugin
 apic_stashed_create_network_db = plugin.Ml2Plugin._create_network_db
 
 
@@ -99,12 +100,13 @@ def _call_on_drivers(method_name, context,
         )
 
 
-@classmethod
-def get_plugin(cls):
-    plugin = apic_stashed_get_plugin()
-    plugin.create_network = create_network
-    plugin._create_network_db = _create_network_db
-    plugin.mechanism_manager._call_on_drivers = _call_on_drivers
+def get_plugin(alias=constants.CORE):
+    plugin = apic_stashed_get_plugin(alias)
+    if plugin and alias == constants.CORE:
+        plugin.create_network = create_network
+        plugin._create_network_db = _create_network_db
+        plugin.mechanism_manager._call_on_drivers = _call_on_drivers
     return plugin
 
-manager.NeutronManager.get_plugin = get_plugin
+
+directory.get_plugin = get_plugin

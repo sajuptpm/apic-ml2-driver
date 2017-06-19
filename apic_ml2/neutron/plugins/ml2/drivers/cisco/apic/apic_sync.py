@@ -13,11 +13,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from neutron.common import constants as n_constants
 from neutron import context
-from neutron import manager
 from neutron.plugins.ml2 import db as l2_db
 from neutron.plugins.ml2 import driver_context
+from neutron_lib import constants as n_constants
+from neutron_lib.plugins import directory
 from oslo_log import log as logging
 from oslo_service import loopingcall
 
@@ -30,7 +30,7 @@ LOG = logging.getLogger(__name__)
 class SynchronizerBase(object):
 
     def __init__(self, driver, interval=None):
-        self.core_plugin = manager.NeutronManager.get_plugin()
+        self.core_plugin = directory.get_plugin()
         self.driver = driver
         self.interval = interval
 

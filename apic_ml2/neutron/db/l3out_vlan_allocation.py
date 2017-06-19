@@ -18,12 +18,12 @@ from six import moves
 import sqlalchemy as sa
 
 from neutron._i18n import _LE, _LI, _LW
-from neutron.common import exceptions as exc
 from neutron.db import api as db_api
-from neutron.db import model_base
 from neutron.plugins.common import constants as p_const
 from neutron.plugins.common import utils as plugin_utils
 from neutron.plugins.ml2.drivers import helpers
+from neutron_lib.db import model_base
+from neutron_lib import exceptions as exc
 
 LOG = log.getLogger(__name__)
 

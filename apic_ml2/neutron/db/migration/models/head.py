@@ -14,7 +14,7 @@
 #    under the License.
 
 from apic_ml2.neutron.db import port_ha_ipaddress_binding  # noqa
-from neutron.db import model_base
+from neutron_lib.db import model_base
 
 
 def get_metadata():

@@ -24,24 +24,23 @@ from keystoneclient import session as keysession
 import netaddr
 from neutron.agent.linux import dhcp
 from neutron.agent import securitygroups_rpc
-from neutron.api.v2 import attributes
-from neutron.common import constants as n_constants
-from neutron.common import exceptions as n_exc
 from neutron.common import rpc as n_rpc
 from neutron.common import topics
 from neutron import context as nctx
 from neutron.db import db_base_plugin_v2 as n_db
 from neutron.db.models import allowed_address_pair as n_addr_pair_db
 from neutron.db import models_v2
+from neutron.db import segments_db as sdb
 from neutron.extensions import portbindings
-from neutron import manager
 from neutron.plugins.common import constants
-from neutron.plugins.ml2 import db as ml2_db
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2 import driver_context
 from neutron.plugins.ml2.drivers import type_vlan  # noqa
 from neutron.plugins.ml2 import models
 from neutron.plugins.ml2 import rpc as neu_rpc
+from neutron_lib import constants as n_constants
+from neutron_lib import exceptions as n_exc
+from neutron_lib.plugins import directory
 from opflexagent import constants as ofcst
 from opflexagent import rpc as o_rpc
 from oslo_concurrency import lockutils
@@ -289,8 +288,8 @@ class APICMechanismDriver(api.MechanismDriver,
     @property
     def l3_plugin(self):
         if not self._l3_plugin:
-            plugins = manager.NeutronManager.get_service_plugins()
-            self._l3_plugin = plugins.get('L3_ROUTER_NAT')
+            plugins = directory.get_plugins()
+            self._l3_plugin = plugins.get(n_constants.L3)
         return self._l3_plugin
 
     @property
@@ -518,7 +517,12 @@ class APICMechanismDriver(api.MechanismDriver,
         self.l3out_vlan_alloc = l3out_vlan_alloc.L3outVlanAlloc()
         self.l3out_vlan_alloc.sync_vlan_allocations(
             self.apic_manager.ext_net_dict)
-        self.advertise_mtu = cfg.CONF.advertise_mtu
+        # REVISIT: The following option is not supported by Neutron
+        # anymore, do we need to define it?
+        try:
+            self.advertise_mtu = cfg.CONF.advertise_mtu
+        except Exception:
+            self.advertise_mtu = None
         self.vrf_per_router_tenants = []
         for vpr_tenant in cfg.CONF.ml2_cisco_apic.vrf_per_router_tenants:
             vpr_tenant = vpr_tenant.strip()
@@ -578,7 +582,7 @@ class APICMechanismDriver(api.MechanismDriver,
 
     # RPC Method
     def get_vrf_details(self, context, **kwargs):
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         ctx = nctx.get_admin_context()
         vrf_id = kwargs['vrf_id']
         router = None
@@ -634,7 +638,7 @@ class APICMechanismDriver(api.MechanismDriver,
         return details
 
     def _get_gbp_details(self, context, **kwargs):
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         port_id = core_plugin._device_to_port_id(
             context, kwargs['device'])
         port_context = core_plugin.get_bound_port_context(
@@ -802,7 +806,7 @@ class APICMechanismDriver(api.MechanismDriver,
                               'tenant_id': snat_network_tenant_id,
                               'name': acst.HOST_SNAT_POOL_PORT,
                               'network_id': snat_network_id,
-                              'mac_address': attributes.ATTR_NOT_SPECIFIED,
+                              'mac_address': n_constants.ATTR_NOT_SPECIFIED,
                               'fixed_ips': [{'subnet_id':
                                              snat_subnets[0]['id']}],
                               'admin_state_up': False}}
@@ -838,8 +842,8 @@ class APICMechanismDriver(api.MechanismDriver,
         """Add information about IP mapping for DNAT/SNAT."""
         if not self.fabric_l3:
             return
-        l3plugin = manager.NeutronManager.get_service_plugins().get(
-            constants.L3_ROUTER_NAT)
+        l3plugin = directory.get_plugins().get(
+            n_constants.L3)
         core_plugin = context._plugin
 
         fips_filter = [port['id']]
@@ -1698,7 +1702,7 @@ class APICMechanismDriver(api.MechanismDriver,
 
     def notify_port_update(self, port_id, context=None):
         context = context or nctx.get_admin_context()
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         try:
             port = core_plugin.get_port(context, port_id)
             if self._is_port_bound(port):
@@ -1709,7 +1713,7 @@ class APICMechanismDriver(api.MechanismDriver,
 
     def notify_port_update_for_fip(self, port_id, context=None):
         context = context or nctx.get_admin_context()
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         try:
             port = core_plugin.get_port(context, port_id)
         except n_exc.PortNotFound:
@@ -2026,7 +2030,7 @@ class APICMechanismDriver(api.MechanismDriver,
                     context, router, shadow_l3out, unlink=True)
 
     def _get_router_interface_subnets(self, context, router_ids):
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         router_intf_ports = core_plugin.get_ports(
             context,
             filters={'device_owner': [n_constants.DEVICE_OWNER_ROUTER_INTF],
@@ -2041,7 +2045,7 @@ class APICMechanismDriver(api.MechanismDriver,
                     for x in port.get('fixed_ips', [])])
 
     def _notify_ports_due_to_router_update(self, router_port):
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         admin_ctx = nctx.get_admin_context()
         dev_owner = router_port['device_owner']
         skip = [n_constants.DEVICE_OWNER_ROUTER_INTF,
@@ -2197,8 +2201,8 @@ class APICMechanismDriver(api.MechanismDriver,
         snat_network = self.db_plugin.create_network(
             context._plugin_context, attrs)
         segment = {api.NETWORK_TYPE: constants.TYPE_LOCAL}
-        ml2_db.add_network_segment(context._plugin_context,
-                                   snat_network['id'], segment)
+        sdb.add_network_segment(context._plugin_context,
+                                snat_network['id'], segment)
 
         if not snat_network:
             LOG.warning(_("SNAT network %(name)s creation failed for "
@@ -2220,11 +2224,11 @@ class APICMechanismDriver(api.MechanismDriver,
                             'enable_dhcp': False,
                             'gateway_ip': gateway,
                             'allocation_pools':
-                            attributes.ATTR_NOT_SPECIFIED,
+                            n_constants.ATTR_NOT_SPECIFIED,
                             'dns_nameservers':
-                            attributes.ATTR_NOT_SPECIFIED,
+                            n_constants.ATTR_NOT_SPECIFIED,
                             'host_routes':
-                            attributes.ATTR_NOT_SPECIFIED}}
+                            n_constants.ATTR_NOT_SPECIFIED}}
         subnet = self.db_plugin.create_subnet(
             context._plugin_context, attrs)
         if not subnet:
@@ -2563,7 +2567,7 @@ class APICMechanismDriver(api.MechanismDriver,
                                  transaction=None):
         # Find networks connected to this router, set/unset the link from
         # corresponding BDs to specified L3Out
-        core_plugin = manager.NeutronManager.get_plugin()
+        core_plugin = directory.get_plugin()
         admin_ctx = nctx.get_admin_context()
         router_intf_ports = core_plugin.get_ports(
             admin_ctx,

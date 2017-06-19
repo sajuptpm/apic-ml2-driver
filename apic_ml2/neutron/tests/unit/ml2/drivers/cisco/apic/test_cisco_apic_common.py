@@ -270,7 +270,7 @@ class ConfigMixin(object):
             '102': {
                 '4/21': ['rhel01', 'rhel02'],
                 '1/4/22': ['rhel03'],
-                '4/23': ['h1'],
+                '4/23': ['h1', 'h2'],
             },
         }
         self.vpc_dict = {
@@ -328,6 +328,8 @@ class ConfigMixin(object):
         cfg.CONF.import_group('keystone_authtoken',
                               'keystonemiddleware.auth_token')
         cfg.CONF.set_override('auth_uri', 'http://127.0.0.1:5000/v2.0/',
+                              group='keystone_authtoken')
+        cfg.CONF.set_override('identity_uri', 'http://127.0.0.1:5000/v2.0',
                               group='keystone_authtoken')
         cfg.CONF.set_override('admin_user', 'user', group='keystone_authtoken')
         cfg.CONF.set_override('admin_password', 'passw',

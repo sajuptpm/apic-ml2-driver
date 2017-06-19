@@ -24,7 +24,7 @@ from apic_ml2.neutron.plugins.ml2.drivers.cisco.apic import constants as acst
 from neutron.tests import base
 
 LOOPING_CALL = 'oslo_service.loopingcall.FixedIntervalLoopingCall'
-GET_PLUGIN = 'neutron.manager.NeutronManager.get_plugin'
+GET_PLUGIN = 'neutron_lib.plugins.directory.get_plugin'
 GET_ADMIN_CONTEXT = 'neutron.context.get_admin_context'
 L2_DB = 'neutron.plugins.ml2.db.get_locked_port_and_binding'
 NETWORK_CONTEXT = 'neutron.plugins.ml2.driver_context.NetworkContext'

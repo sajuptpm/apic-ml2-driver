@@ -17,9 +17,9 @@ from sqlalchemy import orm
 
 from neutron import context as nctx
 from neutron.db import api as db_api
-from neutron.db import model_base
 from neutron.db import models_v2
-from neutron import manager
+from neutron_lib.db import model_base
+from neutron_lib.plugins import directory
 from oslo_db import exception as db_exc
 from oslo_log import log as logging
 
@@ -104,7 +104,7 @@ class HAIPOwnerDbMixin(object):
         self.ha_ip_handler = PortForHAIPAddress()
 
     def _get_plugin(self):
-        return manager.NeutronManager.get_plugin()
+        return directory.get_plugin()
 
     def update_ip_owner(self, ip_owner_info):
         ports_to_update = set()

@@ -14,10 +14,10 @@
 #    under the License.
 
 import mock
-from neutron.common import constants as q_const
-from neutron.common import exceptions as n_exc
 from neutron import context
-from neutron import manager
+from neutron_lib import constants as q_const
+from neutron_lib import exceptions as n_exc
+from neutron_lib.plugins import directory
 
 import apicapi.apic_mapper  # noqa
 
@@ -94,14 +94,14 @@ class TestCiscoApicL3Plugin(testlib_api.SqlTestCase,
         apic_driver.manager.apic.transaction = self.fake_transaction
 
         self.plugin._apic_driver._aci_mech_driver = self.ml2_driver
-        manager.NeutronManager.get_plugin = mock.Mock()
-        manager.NeutronManager.get_plugin.get_subnet = mock.Mock(
+        directory.get_plugin = mock.Mock()
+        directory.get_plugin.get_subnet = mock.Mock(
             return_value=self.subnet)
-        manager.NeutronManager.get_plugin.get_network = mock.Mock(
+        directory.get_plugin.get_network = mock.Mock(
             return_value=self.network)
-        manager.NeutronManager.get_plugin.get_port = mock.Mock(
+        directory.get_plugin.get_port = mock.Mock(
             return_value=self.port)
-        manager.NeutronManager.get_plugin.get_ports = mock.Mock(
+        directory.get_plugin.get_ports = mock.Mock(
             return_value=[self.port])
         self.plugin.get_floatingip = mock.Mock(return_value=self.floatingip)
         self.plugin.update_floatingip_status = mock.Mock()
@@ -113,7 +113,7 @@ class TestCiscoApicL3Plugin(testlib_api.SqlTestCase,
         mock.patch('neutron.db.l3_db.L3_NAT_db_mixin.'
                    'remove_router_interface').start()
         mock.patch(
-            'neutron.manager.NeutronManager.get_service_plugins').start()
+            'neutron_lib.plugins.directory.get_plugins').start()
         mock.patch('neutron.db.l3_db.L3_NAT_db_mixin.'
                    'update_floatingip',
                    new=mock.Mock(return_value=self.floatingip)).start()

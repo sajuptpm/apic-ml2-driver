@@ -14,9 +14,9 @@
 #    under the License.
 
 from apicapi import apic_mapper
-from neutron.common import constants as q_const
-from neutron.common import exceptions as n_exc
 from neutron.extensions import l3
+from neutron_lib import constants as q_const
+from neutron_lib import exceptions as n_exc
 from oslo_log import log as logging
 
 from apic_ml2.neutron.plugins.ml2.drivers.cisco.apic import mechanism_apic

@@ -27,19 +27,19 @@ from apicapi import apic_mapper
 import mock
 import netaddr
 from neutron.api import extensions
-from neutron.common import constants as n_constants
 from neutron import context
 from neutron.db import db_base_plugin_v2  # noqa
 from neutron.db import models_v2  # noqa
+from neutron.db import segments_db as sdb
 from neutron.extensions import portbindings
-from neutron import manager
-from neutron.plugins.ml2 import db as ml2_db
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2 import driver_context
 from neutron.plugins.ml2.drivers import type_vlan  # noqa
 from neutron.tests.unit.api import test_extensions
 from neutron.tests.unit.db import test_db_base_plugin_v2 as test_plugin
 from neutron.tests.unit import testlib_api
+from neutron_lib import constants as n_constants
+from neutron_lib.plugins import directory
 from opflexagent import constants as ofcst
 from oslo_serialization import jsonutils as json
 # Mock the opflex agent type driver, and its constants,
@@ -130,11 +130,10 @@ class ApicML2IntegratedTestBase(test_plugin.NeutronDbPluginV2TestCase,
                            group='ml2')
         self.override_conf('path_mtu', 1000, group='ml2')
         self.override_conf('global_physnet_mtu', 1000)
-        self.override_conf('advertise_mtu', True, None)
         service_plugins = (
             service_plugins or
-            {'L3_ROUTER_NAT': 'apic_ml2.neutron.services.l3_router.'
-                              'l3_apic.ApicL3ServicePlugin',
+            {n_constants.L3: 'apic_ml2.neutron.services.l3_router.'
+                             'l3_apic.ApicL3ServicePlugin',
              'flavors_plugin_name': 'neutron.services.flavors.'
                                     'flavors_plugin.FlavorsPlugin'})
         mock.patch('apic_ml2.neutron.plugins.ml2.drivers.'
@@ -152,6 +151,7 @@ class ApicML2IntegratedTestBase(test_plugin.NeutronDbPluginV2TestCase,
         self.plugin.is_agent_down = mock.Mock(return_value=False)
         self.driver = self.plugin.mechanism_manager.mech_drivers[
             'cisco_apic_ml2'].obj
+        self.driver.advertise_mtu = True
         self.synchronizer = mock.Mock()
         md.importutils = mock.Mock()
         md.APICMechanismDriver.get_base_synchronizer = mock.Mock(
@@ -173,8 +173,7 @@ class ApicML2IntegratedTestBase(test_plugin.NeutronDbPluginV2TestCase,
         self.mgr = self.driver.apic_manager
         self.mgr.apic.fvTenant.name = name
         self.mgr.apic.fvCtx.name = name
-        self.l3_plugin = manager.NeutronManager.get_service_plugins()[
-            'L3_ROUTER_NAT']
+        self.l3_plugin = directory.get_plugins()[n_constants.L3]
         self.driver.apic_manager.vmm_shared_secret = base64.b64encode(
             'dirtylittlesecret')
         self.driver.notifier = mock.Mock()
@@ -209,7 +208,7 @@ class ApicML2IntegratedTestBase(test_plugin.NeutronDbPluginV2TestCase,
         return {name: ext_info}
 
     def _register_agent(self, host, agent_cfg=AGENT_CONF):
-        plugin = manager.NeutronManager.get_plugin()
+        plugin = directory.get_plugin()
         ctx = context.get_admin_context()
         agent = {'host': host}
         agent.update(agent_cfg)
@@ -1342,11 +1341,12 @@ class MechanismRpcTestCase(ApicML2IntegratedTestBase):
             mock.Mock(), 'h1', 'static', None, '1', '1', '1')
 
 
-class TestCiscoApicMechDriver(testlib_api.SqlTestCase,
+class TestCiscoApicMechDriver(testlib_api.WebTestCase,
                               mocked.ControllerMixin,
                               mocked.ConfigMixin):
     def setUp(self):
         super(TestCiscoApicMechDriver, self).setUp()
+        self.setup_coreplugin(PLUGIN_NAME)
         mocked.ControllerMixin.set_up_mocks(self)
         mocked.ConfigMixin.set_up_mocks(self)
         self.mock_apic_manager_login_responses()
@@ -1379,7 +1379,8 @@ class TestCiscoApicMechDriver(testlib_api.SqlTestCase,
         self.agent = {'configurations': {
             'opflex_networks': None,
             'bridge_mappings': {'physnet1': 'br-eth1'}}}
-        mock.patch('neutron.manager.NeutronManager').start()
+        # REVISIT: Should the get_plugin in neutron_lib.plugins.directory
+        # be mocked?
         self.driver._l3_plugin = mock.Mock()
         self.driver._allocate_snat_ip = echo
         self.driver._create_snat_ip_allocation_subnet = echo
@@ -1666,11 +1667,10 @@ l3extRsPathL3OutAtt": {"attributes": {"ifInstT": "sub-interface", "encap": \
             mocked.APIC_CONTRACT)
         self.driver.l3out_vlan_alloc.reserve_vlan = mock.Mock()
 
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = [
+        directory.get_plugin().get_networks = mock.MagicMock(return_value=[
             {'tenant_id': mocked.APIC_TENANT,
              'name': mocked.APIC_NETWORK,
-             'id': u'net_id'}]
+             'id': u'net_id'}])
         self.driver.update_port_postcommit(port_ctx)
         mgr.get_router_contract.assert_called_once_with(
             self._scoped_name(port_ctx.current['device_id']),
@@ -1893,11 +1893,10 @@ tt':
         self.driver.apic_manager.apic.fvCtx.name = echo1
         self.driver.l3out_vlan_alloc.reserve_vlan.return_value = 999
 
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = [
+        directory.get_plugin().get_networks = mock.MagicMock(return_value=[
             {'tenant_id': mocked.APIC_TENANT,
              'name': mocked.APIC_NETWORK,
-             'id': u'net_id'}]
+             'id': u'net_id'}])
 
         self.driver.update_port_postcommit(port_ctx)
         mgr.get_router_contract.assert_called_once_with(
@@ -2082,8 +2081,8 @@ tt':
             {'tenant_id': mocked.APIC_TENANT + '2',
              'name': mocked.APIC_NETWORK,
              'id': 'net_id2'}]
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = nets
+        directory.get_plugin().get_networks = mock.MagicMock(
+            return_value=nets)
 
         self.driver.update_port_postcommit(port_ctx)
         mgr.get_router_contract.assert_called_once_with(
@@ -2179,11 +2178,10 @@ tt':
                                           'vm1', net_ctx, HOST_ID1, gw=True)
         self.driver._delete_path_if_last = mock.Mock()
         self.driver.l3out_vlan_alloc.release_vlan = mock.Mock()
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = [
+        directory.get_plugin().get_networks = mock.MagicMock(return_value=[
             {'tenant_id': mocked.APIC_TENANT,
              'name': mocked.APIC_NETWORK,
-             'id': 'net_id'}]
+             'id': 'net_id'}])
         self.driver.delete_port_postcommit(port_ctx)
         mgr = self.driver.apic_manager
         vrf_pfx = ('%s-' % mocked.APIC_ROUTER
@@ -2212,11 +2210,10 @@ tt':
                                           'vm1', net_ctx, HOST_ID1, gw=True)
         self.driver._delete_path_if_last = mock.Mock()
         self.driver.l3out_vlan_alloc.release_vlan = mock.Mock()
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = [
+        directory.get_plugin().get_networks = mock.MagicMock(return_value=[
             {'tenant_id': mocked.APIC_TENANT,
              'name': mocked.APIC_NETWORK,
-             'id': 'net_id'}]
+             'id': 'net_id'}])
         self.driver.delete_port_postcommit(port_ctx)
         mgr = self.driver.apic_manager
         vrf_pfx = ('%s-' % mocked.APIC_ROUTER
@@ -2291,8 +2288,8 @@ tt':
             {'tenant_id': mocked.APIC_TENANT + '2',
              'name': mocked.APIC_NETWORK,
              'id': 'net_id2'}]
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = nets
+        directory.get_plugin().get_networks = mock.MagicMock(
+            return_value=nets)
 
         self.driver.update_port_postcommit(port_ctx)
         l3out_name = self._scoped_name(mocked.APIC_NETWORK_NO_NAT)
@@ -2301,8 +2298,7 @@ tt':
             owner=self._router_tenant())
 
         mgr.set_context_for_external_routed_network.assert_called_once_with(
-            self._tenant(), l3out_name,
-            self._routed_network_vrf_name(),
+            self._tenant(), l3out_name, self._routed_network_vrf_name(),
             transaction=mock.ANY)
 
         mgr.ensure_external_epg_consumed_contract.assert_called_once_with(
@@ -2387,8 +2383,8 @@ tt':
             {'tenant_id': mocked.APIC_TENANT + '2',
              'name': mocked.APIC_NETWORK,
              'id': 'net_id2'}]
-        manager.NeutronManager = mock.MagicMock()
-        manager.NeutronManager.get_plugin().get_networks.return_value = nets
+        directory.get_plugin().get_networks = mock.MagicMock(
+            return_value=nets)
 
         self.driver.delete_port_postcommit(port_ctx)
 
@@ -3882,8 +3878,8 @@ class TestApicML2IntegratedPhysicalNode(ApicML2IntegratedTestBase):
             return port_context.bottom_bound_segment, driver
 
     def _query_dynamic_seg(self, network_id):
-        return ml2_db.get_network_segments(
-            context.get_admin_context().session, network_id,
+        return sdb.get_network_segments(
+            context.get_admin_context(), network_id,
             filter_dynamic=True)
 
     def test_physical_bind(self):
@@ -4188,7 +4184,7 @@ class TestCiscoApicMechDriverHostSNAT(ApicML2IntegratedTestBase):
         self.agent = {'configurations': {
             'opflex_networks': None,
             'bridge_mappings': {'physnet1': 'br-eth1'}}}
-        self.actual_core_plugin = manager.NeutronManager.get_plugin()
+        self.actual_core_plugin = directory.get_plugin()
         self.driver._l3_plugin = mock.Mock()
 
         def get_resource(context, resource_id):
@@ -4680,7 +4676,7 @@ class TestCiscoApicMechDriverHostSNAT(ApicML2IntegratedTestBase):
             filters={'name': [self.driver._get_snat_db_network_name(db_net)]})
         snat_net_id = snat_networks[0]['id']
         self.assertEqual(1, len(snat_networks))
-        seg = ml2_db.get_network_segments(ctx.session, snat_net_id)
+        seg = sdb.get_network_segments(ctx, snat_net_id)
         self.assertEqual(1, len(seg))
         subnets = self.driver.db_plugin.get_subnets(
             ctx, filters={'name': [acst.HOST_SNAT_POOL]})
@@ -4690,7 +4686,7 @@ class TestCiscoApicMechDriverHostSNAT(ApicML2IntegratedTestBase):
             ctx,
             filters={'name': [self.driver._get_snat_db_network_name(db_net)]})
         self.assertEqual(0, len(snat_networks))
-        seg = ml2_db.get_network_segments(ctx.session, snat_net_id)
+        seg = sdb.get_network_segments(ctx, snat_net_id)
         self.assertEqual(0, len(seg))
         subnets = self.driver.db_plugin.get_subnets(
             ctx, filters={'name': [acst.HOST_SNAT_POOL]})

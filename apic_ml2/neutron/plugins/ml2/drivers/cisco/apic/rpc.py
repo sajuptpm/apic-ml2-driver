@@ -25,10 +25,10 @@ from neutron.common import rpc
 from neutron import context as nctx
 from neutron.db import api as db_api
 from neutron.extensions import providernet as api
-from neutron import manager
 from neutron.plugins.common import constants
 from neutron.plugins.ml2.drivers import type_vlan  # noqa
 from neutron.plugins.ml2 import models
+from neutron_lib.plugins import directory
 
 from apic_ml2.neutron.plugins.ml2.drivers.cisco.apic import apic_model
 
@@ -111,7 +111,7 @@ class ApicTopologyRpcCallbackMechanism(ApicTopologyRpcCallback):
         # Remove link from the DB
         link = self.apic_manager.remove_hostlink(*args)
         context = nctx.get_admin_context()
-        plugin = manager.NeutronManager.get_plugin()
+        plugin = directory.get_plugin()
         host = args[0]
         LOG.debug("existing link from deletion %s", str(link))
         # Another interface could still be up for that host on that module
@@ -142,7 +142,7 @@ class ApicTopologyRpcCallbackMechanism(ApicTopologyRpcCallback):
                        "been server"), args)
 
         context = nctx.get_admin_context()
-        plugin = manager.NeutronManager.get_plugin()
+        plugin = directory.get_plugin()
         host = args[0]
 
         for network in self._get_networks_from_host(context, plugin, host):
